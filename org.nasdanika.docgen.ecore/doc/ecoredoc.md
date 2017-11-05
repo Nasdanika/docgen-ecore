@@ -38,3 +38,5 @@ markdown rendering
 Plant UML
 
 uml plug-in
+
+GraphViz

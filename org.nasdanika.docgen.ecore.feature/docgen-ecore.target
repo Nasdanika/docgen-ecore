@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<?pde version="3.8"?><target name="help" sequenceNumber="3">
+<?pde version="3.8"?><target name="docgen-ecore" sequenceNumber="4">
 <locations>
 <location path="${eclipse_home}" type="Profile"/>
 <location includeAllPlatforms="false" includeConfigurePhase="true" includeMode="planner" includeSource="true" type="InstallableUnit">
@@ -11,7 +11,7 @@
 <repository location="http://www.nasdanika.org/maven-osgi"/>
 </location>
 <location includeAllPlatforms="false" includeConfigurePhase="true" includeMode="planner" includeSource="true" type="InstallableUnit">
-<unit id="org.nasdanika.feature.feature.group" version="1.1.0.201711051905"/>
+<unit id="org.nasdanika.feature.feature.group" version="1.1.0.201711052007"/>
 <repository location="http://www.nasdanika.org/server/repository"/>
 </location>
 </locations>

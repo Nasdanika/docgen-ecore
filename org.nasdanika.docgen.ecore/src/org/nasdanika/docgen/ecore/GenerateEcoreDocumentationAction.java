@@ -1,6 +1,5 @@
 package org.nasdanika.docgen.ecore;
 
-import java.awt.geom.GeneralPath;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -16,10 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-
-import org.eclipse.emf.codegen.ecore.genmodel.GenClassifier;
-import org.eclipse.emf.codegen.ecore.genmodel.GenPackage;
-
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -44,6 +39,8 @@ import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.SubMonitor;
+import org.eclipse.emf.codegen.ecore.genmodel.GenClassifier;
+import org.eclipse.emf.codegen.ecore.genmodel.GenPackage;
 import org.eclipse.emf.common.util.TreeIterator;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EClass;
@@ -195,14 +192,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 				if (next instanceof EPackage) {
 					load((EPackage) next, ePackages);
 				} else if (next instanceof GenPackage) {
-					GenPackage genPackage = (GenPackage) next;
-					for (GenClassifier gc: genPackage.getGenClassifiers()) {
-						EClassifier ec = gc.getEcoreClassifier();
-						if (ec.getInstanceClassName() == null) {
-							ec.setInstanceClassName(gc.getRawInstanceClassName());
-						}
-					}					
-					load(genPackage.getEcorePackage(), ePackages);
+					load((GenPackage) next, ePackages);
 				}
 			}
 		}
@@ -301,7 +291,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			List<EClassifier> eClassifiers = new ArrayList<>(ePackage.getEClassifiers());
 			eClassifiers.sort((a,b) -> a.getName().compareTo(b.getName()));
 			SubMonitor packageMonitor = SubMonitor.convert(subMonitor.split(1), eClassifiers.size()*4+10);
-			packageMonitor.setTaskName("EPackage " + ePackage.getName() + "("+ePackage.getNsURI()+")");
+			packageMonitor.setTaskName("EPackage " + ePackage.getName() + " ("+ePackage.getNsURI()+")");
 			String packageFolderName = Hex.encodeHexString(ePackage.getNsURI().getBytes(StandardCharsets.UTF_8));
 			
 			IFolder packageSiteOutputFolder = siteOutput == null ? null : createFolder(siteOutput, packageFolderName, packageMonitor.split(1));
@@ -439,25 +429,8 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			}
 			
 			for (EPackage ePackage: ePackagesList) {
-				String pLabel = ePackage.getName();
-				if (hasDuplicateName(ePackage, ePackagesList)) {
-					pLabel += " ("+ePackage.getNsURI()+")";
-				}
-				Element pTopic = toc.createElement("topic");
-				pTopic.setAttribute("label", pLabel);
-				root.appendChild(pTopic);
-				
-				String packageFolderName = Hex.encodeHexString(ePackage.getNsURI().getBytes(StandardCharsets.UTF_8));
-				pTopic.setAttribute("href", prefix+packageFolderName+"/package-summary.html");
-				
-				List<EClassifier> eClassifiers = new ArrayList<>(ePackage.getEClassifiers());
-				eClassifiers.sort((a,b) -> a.getName().compareTo(b.getName()));
-				
-				for (EClassifier eClassifier: eClassifiers) {
-					Element cTopic = toc.createElement("topic");
-					cTopic.setAttribute("label", eClassifier.getName());
-					pTopic.appendChild(cTopic);
-					cTopic.setAttribute("href", prefix+packageFolderName+"/"+eClassifier.getName()+".html");					
+				if (ePackage.getESuperPackage() == null) {
+					root.appendChild(createEPackageTopic(toc, prefix, ePackage, hasDuplicateName(ePackage, ePackagesList)));
 				}
 			}
 			
@@ -482,6 +455,35 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		
 		
 	}
+
+	private Element createEPackageTopic(Document document, String prefix, EPackage ePackage, boolean hasDuplicateName) {
+		String pLabel = ePackage.getName();
+		if (hasDuplicateName) {
+			pLabel += " ("+ePackage.getNsURI()+")";
+		}
+		Element pTopic = document.createElement("topic");
+		pTopic.setAttribute("label", pLabel);
+		
+		String packageFolderName = Hex.encodeHexString(ePackage.getNsURI().getBytes(StandardCharsets.UTF_8));
+		pTopic.setAttribute("href", prefix+packageFolderName+"/package-summary.html");
+
+		List<EPackage> eSubPackages = new ArrayList<>(ePackage.getESubpackages());
+		eSubPackages.sort((a,b) -> a.getName().compareTo(b.getName()));
+		for (EPackage sp: eSubPackages) {
+			pTopic.appendChild(createEPackageTopic(document, prefix, sp, false)); // Don't care about checking duplicate name in sub-packages.
+		}
+		
+		List<EClassifier> eClassifiers = new ArrayList<>(ePackage.getEClassifiers());
+		eClassifiers.sort((a,b) -> a.getName().compareTo(b.getName()));
+		
+		for (EClassifier eClassifier: eClassifiers) {
+			Element cTopic = document.createElement("topic");
+			cTopic.setAttribute("label", eClassifier.getName());
+			pTopic.appendChild(cTopic);
+			cTopic.setAttribute("href", prefix+packageFolderName+"/"+eClassifier.getName()+".html");					
+		}
+		return pTopic;
+	}
 	
 	private static boolean hasDuplicateName(EPackage ePackage, Collection<EPackage> ePackages) {
 		for (EPackage ep: ePackages) {
@@ -504,7 +506,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		}
 	}
 	
-	private void load(EPackage ePackage, Set<EPackage> ePackages) {
+	private boolean load(EPackage ePackage, Set<EPackage> ePackages) {
 		if (ePackages.add(ePackage)) {
 			TreeIterator<EObject> cit = ePackage.eAllContents();
 			while (cit.hasNext()) {
@@ -518,6 +520,20 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 					if (eType != null) {
 						load(eType.getEPackage(), ePackages);
 					}
+				}
+			}		
+			return true;
+		}		
+		return false;
+	}
+	
+	private void load(GenPackage genPackage, Set<EPackage> ePackages) {
+		EPackage ePackage = genPackage.getEcorePackage();
+		if (load(ePackage, ePackages)) {
+			for (GenClassifier gc: genPackage.getGenClassifiers()) {
+				EClassifier ec = gc.getEcoreClassifier();
+				if (ec.getInstanceClassName() == null) {
+					ec.setInstanceClassName(gc.getRawInstanceClassName());
 				}
 			}			
 		}		

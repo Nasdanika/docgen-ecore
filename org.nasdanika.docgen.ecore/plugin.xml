@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+
+   <extension
+         point="org.eclipse.help.toc">
+      <toc
+            file="help/toc.xml">
+      </toc>
+      <toc
+            file="doc/toc.xml">
+      </toc>
+   </extension>
+   <extension
+         point="org.eclipse.ui.preferencePages">
+      <page
+            name="Ecore Documentation Generation Preferences"
+            class="org.nasdanika.docgen.ecore.preferences.EcoreDocgenPreferencePage"
+            id="org.nasdanika.docgen.ecore.preferences.EcoreDocgenPreferencePage">
+      </page>
+   </extension>
+   <extension
+         point="org.eclipse.core.runtime.preferences">
+      <initializer
+            class="org.nasdanika.docgen.ecore.preferences.PreferenceInitializer">
+      </initializer>
+   </extension>
+   <extension
+         point="org.eclipse.help.contentProducer">
+      <binding
+            producerId="org.nasdanika.help.MarkdownContentProducer">
+      </binding>
+   </extension>
+   
+   
+     <extension point="org.eclipse.ui.popupMenus" id="generate-ecore-documentation">
+      <objectContribution
+            id="org.nasdanika.docgen.ecore.spec"
+            nameFilter="ecore-docgen.yml"
+            objectClass="org.eclipse.core.resources.IFile">
+         <action
+               label="Generate Ecore Documentation"
+               class="org.nasdanika.docgen.ecore.GenerateEcoreDocumentationAction"
+               menubarPath="additions"
+               enablesFor="1"
+               id="org.nasdanika.docgen.ecore.generate">
+         </action>
+      </objectContribution>
+   </extension>
+   
+
+</plugin>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feature
+      id="org.nasdanika.docgen.ecore.feature"
+      label="Ecore Documentation Generator Feature"
+      version="1.0.0.qualifier">
+
+   <description>
+      Ecore Models documentation generation - static HTML and Eclipse Help.
+   </description>
+
+   <copyright>
+      Property of Nasdanika LLC, all rights reserved.
+   </copyright>
+
+   <license url="https://www.eclipse.org/legal/epl-v10.html">
+      Eclipse public license
+   </license>
+
+   <plugin
+         id="org.nasdanika.docgen.ecore"
+         download-size="0"
+         install-size="0"
+         version="0.0.0"/>
+
+</feature>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?NLS TYPE="org.eclipse.help.toc"?>
+
+<toc label="Nasdanika" link_to="../org.nasdanika.help/toc.xml#Nasdanika">
+   <topic href="doc/ecoredoc.md.html" label="Ecore documentation generator"/>
+</toc>

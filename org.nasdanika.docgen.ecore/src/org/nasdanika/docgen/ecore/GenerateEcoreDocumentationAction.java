@@ -1,5 +1,6 @@
 package org.nasdanika.docgen.ecore;
 
+import java.awt.geom.GeneralPath;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -15,6 +16,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+
+import org.eclipse.emf.codegen.ecore.genmodel.GenClassifier;
+import org.eclipse.emf.codegen.ecore.genmodel.GenPackage;
+
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -189,8 +194,16 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 				EObject next = cit.next();
 				if (next instanceof EPackage) {
 					load((EPackage) next, ePackages);
-					cit.prune();
-				} 				
+				} else if (next instanceof GenPackage) {
+					GenPackage genPackage = (GenPackage) next;
+					for (GenClassifier gc: genPackage.getGenClassifiers()) {
+						EClassifier ec = gc.getEcoreClassifier();
+						if (ec.getInstanceClassName() == null) {
+							ec.setInstanceClassName(gc.getRawInstanceClassName());
+						}
+					}					
+					load(genPackage.getEcorePackage(), ePackages);
+				}
 			}
 		}
 		
@@ -496,10 +509,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			TreeIterator<EObject> cit = ePackage.eAllContents();
 			while (cit.hasNext()) {
 				EObject next = cit.next();
-				if (next instanceof EPackage) {
-					load((EPackage) next, ePackages);
-					cit.prune();
-				} else if (next instanceof EClass) {
+				if (next instanceof EClass) {
 					for (EClass st: ((EClass) next).getESuperTypes()) {
 						load(st.getEPackage(), ePackages);
 					}

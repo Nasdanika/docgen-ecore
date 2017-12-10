@@ -20,7 +20,7 @@ toc:
   link_to: Where to link       
 ```
 
-* ``models`` - a list of relative paths to models to generate documentation for. All referenced models will also be included.
+* ``models`` - a list of relative paths to models to generate documentation for - ``.ecore`` or ``.genmodel``. All referenced models will also be included. When generator models (``.genmodel``) are used the generated documentation includes Java type information. 
 * ``api`` - a list of URL's of JavaDoc sites to resolve JavaDoc links. Optional.
 * ``output`` - outputs to generate
   * ``site`` - static HTML site. Optional.

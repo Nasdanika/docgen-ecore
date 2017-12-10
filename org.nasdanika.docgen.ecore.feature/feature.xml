@@ -16,6 +16,11 @@
       Eclipse public license
    </license>
 
+   <url>
+      <discovery label="Nasdanika Foundation Server" url="http://www.nasdanika.org/server/repository"/>
+      <discovery label="Nasdanika Help Extensions" url="http://www.nasdanika.org/products/help/repository"/>
+   </url>
+
    <plugin
          id="org.nasdanika.docgen.ecore"
          download-size="0"

@@ -7,6 +7,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,6 +33,7 @@ import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IConfigurationElement;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
@@ -64,13 +67,28 @@ import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.actions.WorkspaceModifyOperation;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.nasdanika.doc.ecore.EClassDocumentationGenerator;
 import org.nasdanika.doc.ecore.EDataTypeDocumentationGenerator;
 import org.nasdanika.doc.ecore.EEnumDocumentationGenerator;
 import org.nasdanika.doc.ecore.EPackageDocumentationGenerator;
 import org.nasdanika.doc.ecore.PlantUmlTextGenerator.RelationshipDirection;
+import org.nasdanika.help.markdown.ExtensibleMarkdownLinkRenderer;
+import org.nasdanika.help.markdown.MarkdownLinkRenderer;
+import org.nasdanika.help.markdown.MarkdownPreProcessor;
+import org.nasdanika.help.markdown.URLRewriter;
+import org.nasdanika.html.ApplicationPanel;
+import org.nasdanika.html.Bootstrap.Style;
 import org.nasdanika.html.HTMLFactory;
+import org.nasdanika.html.RowContainer.Row;
+import org.nasdanika.html.Table;
+import org.nasdanika.html.Tag;
+import org.nasdanika.html.Tag.TagName;
+import org.nasdanika.html.Theme;
 import org.osgi.framework.Bundle;
+import org.pegdown.Extensions;
+import org.pegdown.PegDownProcessor;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.yaml.snakeyaml.Yaml;
@@ -231,6 +249,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		collectResources(webResourcesBundle, "/jstree/", webResourcesPaths);
 		collectResources(webResourcesBundle, "/js/", webResourcesPaths);
 		collectResources(webResourcesBundle, "/images/", webResourcesPaths);		
+		collectResources(webResourcesBundle, "/img/", webResourcesPaths);		
 		
 		// Web resources
 		if (siteOutput == null) {
@@ -243,6 +262,9 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 				rMon.subTask(path);
 				createFile(rFolder, path, webResourcesBundle.getEntry(path).openStream(), rMon.split(1));
 			}
+			
+			// left-panel.js
+			createFile(rFolder, "js/left-panel.js", GenerateEcoreDocumentationAction.class.getResourceAsStream("left-panel.js"), rMon.split(1));
 		}
 		
 		if (helpOutput == null) {
@@ -290,7 +312,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		for (EPackage ePackage: ePackagesList) {
 			List<EClassifier> eClassifiers = new ArrayList<>(ePackage.getEClassifiers());
 			eClassifiers.sort((a,b) -> a.getName().compareTo(b.getName()));
-			SubMonitor packageMonitor = SubMonitor.convert(subMonitor.split(1), eClassifiers.size()*4+10);
+			SubMonitor packageMonitor = SubMonitor.convert(subMonitor.split(1), eClassifiers.size()*4+11);
 			packageMonitor.setTaskName("EPackage " + ePackage.getName() + " ("+ePackage.getNsURI()+")");
 			String packageFolderName = Hex.encodeHexString(ePackage.getNsURI().getBytes(StandardCharsets.UTF_8));
 			
@@ -298,29 +320,27 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			IFolder packageHelpOutputFolder = helpOutput == null ? null : createFolder(helpOutput, packageFolderName, packageMonitor.split(1));
 			
 			if (packageSiteOutputFolder == null) {
-				packageMonitor.worked(1);
+				packageMonitor.worked(2);
+			} else {
+				packageSiteOutputFolder.setDerived(true, packageMonitor.split(1));
 			}
 			
 			if (packageHelpOutputFolder == null) {
-				packageMonitor.worked(1);
+				packageMonitor.worked(2);
+			} else {
+				packageHelpOutputFolder.setDerived(true, packageMonitor.split(1));				
 			}
 			
 			for (EClassifier eClassifier: eClassifiers) {
 				monitor.subTask(eClassifier.eClass().getName()+" "+eClassifier.getName());
 				// classifier doc
 				
-				String classifierDocumentation;
-				if (eClassifier instanceof EClass) {
-					EClassDocumentationGenerator eClassDocumentationGenerator = new EClassDocumentationGenerator((EClass) eClassifier) {
-						
-						protected String getIconsBaseLocation() {
-							return ICONS_BASE_LOCATION;
-						}
-						
-					};
-					classifierDocumentation = eClassDocumentationGenerator.generateDocumentation();
-				
+				String siteClassifierDocumentation = null;
+				String helpClassifierDocumentation = null;
+				if (eClassifier instanceof EClass) {				
 					if (packageSiteOutputFolder != null) {
+						EClassDocumentationGenerator eClassDocumentationGenerator = createEClassDocumentationGenerator((EClass) eClassifier, true);
+						siteClassifierDocumentation = eClassDocumentationGenerator.generateDocumentation();
 						ByteArrayOutputStream imgContent = new ByteArrayOutputStream();
 						eClassDocumentationGenerator.generateDiagram(false, null, 1, RelationshipDirection.both, true, true, imgContent);				
 						IFile eClassSiteDiagramFile = createFile(packageSiteOutputFolder, eClassifier.getName()+".png", new ByteArrayInputStream(imgContent.toByteArray()), packageMonitor.split(1));
@@ -328,35 +348,34 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 					}
 					
 					if (packageHelpOutputFolder != null) {
+						EClassDocumentationGenerator eClassDocumentationGenerator = createEClassDocumentationGenerator((EClass) eClassifier, false);
+						helpClassifierDocumentation = eClassDocumentationGenerator.generateDocumentation();
 						ByteArrayOutputStream imgContent = new ByteArrayOutputStream();
 						eClassDocumentationGenerator.generateDiagram(false, null, 1, RelationshipDirection.both, true, true, imgContent);				
 						IFile eClassHelpDiagramFile = createFile(packageHelpOutputFolder, eClassifier.getName()+".png", new ByteArrayInputStream(imgContent.toByteArray()), packageMonitor.split(1));
 						eClassHelpDiagramFile.setDerived(true, packageMonitor.split(1));
 					}					
 				} else if (eClassifier instanceof EEnum) {
-					EEnumDocumentationGenerator eEnumDocumentationGenerator = new EEnumDocumentationGenerator((EEnum) eClassifier) {
-						
-						protected String getIconsBaseLocation() {
-							return ICONS_BASE_LOCATION;
-						}
-						
-					};
-					classifierDocumentation = eEnumDocumentationGenerator.generateDocumentation();						
+					if (packageSiteOutputFolder != null) {
+						siteClassifierDocumentation = createEEnumDocumentationGenerator((EEnum) eClassifier, true).generateDocumentation();
+					}
+					if (packageHelpOutputFolder != null) {
+						helpClassifierDocumentation = createEEnumDocumentationGenerator((EEnum) eClassifier, false).generateDocumentation();
+					}					
 				} else { // EDataType
-					EDataTypeDocumentationGenerator eDataTypeDocumentationGenerator = new EDataTypeDocumentationGenerator((EDataType) eClassifier) {
-						
-						protected String getIconsBaseLocation() {
-							return ICONS_BASE_LOCATION;
-						}
-						
-					};
-					classifierDocumentation = eDataTypeDocumentationGenerator.generateDocumentation();												
+					if (packageSiteOutputFolder != null) {
+						siteClassifierDocumentation = createEDataTypeDocumentationGenerator((EDataType) eClassifier, true).generateDocumentation();
+					}
+					
+					if (packageHelpOutputFolder != null) {
+						helpClassifierDocumentation = createEDataTypeDocumentationGenerator((EDataType) eClassifier, false).generateDocumentation();
+					}
 				}
 				
 				if (packageSiteOutputFolder == null) {
 					packageMonitor.worked(2);
 				} else {
-					InputStream content = new ByteArrayInputStream(classifierDocumentation.getBytes(StandardCharsets.UTF_8));
+					InputStream content = new ByteArrayInputStream(siteClassifierDocumentation.getBytes(StandardCharsets.UTF_8));
 					IFile eClassifierSiteFile = createFile(packageSiteOutputFolder, eClassifier.getName()+".html", content, packageMonitor.split(1));
 					eClassifierSiteFile.setDerived(true, packageMonitor.split(1));
 				}
@@ -364,7 +383,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 				if (packageHelpOutputFolder == null) {
 					packageMonitor.worked(2);
 				} else {
-					String wrappedDocumentation = HTMLFactory.INSTANCE.interpolate(GenerateEcoreDocumentationAction.class.getResource("help-page-template.html"), "content", classifierDocumentation);
+					String wrappedDocumentation = HTMLFactory.INSTANCE.interpolate(GenerateEcoreDocumentationAction.class.getResource("help-page-template.html"), "content", helpClassifierDocumentation);
 					InputStream content = new ByteArrayInputStream(wrappedDocumentation.getBytes(StandardCharsets.UTF_8));
 					IFile eClassifierHelpFile = createFile(packageHelpOutputFolder, eClassifier.getName()+".html", content, packageMonitor.split(1));
 					eClassifierHelpFile.setDerived(true, packageMonitor.split(1));
@@ -372,17 +391,11 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			}
 
 			// package doc			
-			EPackageDocumentationGenerator ePacakgeDocumentationGenerator = new EPackageDocumentationGenerator(ePackage) {
-				
-				protected String getIconsBaseLocation() {
-					return ICONS_BASE_LOCATION;
-				}
-				
-			};
-			String ePackageDocumentation = ePacakgeDocumentationGenerator.generateDocumentation();
 			if (packageSiteOutputFolder == null) {
 				packageMonitor.worked(4);
 			} else {
+				EPackageDocumentationGenerator ePacakgeDocumentationGenerator = createEPackageDocumentationGenerator(ePackage, true);
+				String ePackageDocumentation = ePacakgeDocumentationGenerator.generateDocumentation();
 				InputStream content = new ByteArrayInputStream(ePackageDocumentation.getBytes(StandardCharsets.UTF_8));
 				IFile ePackageSiteFile = createFile(packageSiteOutputFolder, "package-summary.html", content, packageMonitor.split(1));
 				ePackageSiteFile.setDerived(true, packageMonitor.split(1));
@@ -397,6 +410,8 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			if (packageHelpOutputFolder == null) {
 				packageMonitor.worked(4);
 			} else {
+				EPackageDocumentationGenerator ePacakgeDocumentationGenerator = createEPackageDocumentationGenerator(ePackage, false);
+				String ePackageDocumentation = ePacakgeDocumentationGenerator.generateDocumentation();
 				String wrappedDocumentation = HTMLFactory.INSTANCE.interpolate(GenerateEcoreDocumentationAction.class.getResource("help-page-template.html"), "content", ePackageDocumentation);
 				InputStream content = new ByteArrayInputStream(wrappedDocumentation.getBytes(StandardCharsets.UTF_8));
 				IFile ePackageHelpFile = createFile(packageHelpOutputFolder, "package-summary.html", content, packageMonitor.split(1));
@@ -446,14 +461,332 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			baos.close();
 			
 			InputStream content = new ByteArrayInputStream(baos.toByteArray());
-			IFile ePackageHelpFile = createFile(helpOutput, "toc.xml", content, subMonitor.split(1));
-			ePackageHelpFile.setDerived(true, subMonitor.split(1));			
+			IFile tocFile = createFile(helpOutput, "toc.xml", content, subMonitor.split(1));
+			tocFile.setDerived(true, subMonitor.split(1));			
 		}
 		
 		
-		// Menu ... site, help		
+		// Site index.html - tree - pkg, classifiers, splitter, content, router, title.
+		if (siteOutput != null) {
+			final JSONObject idMap = new JSONObject();
+			JSONArray tree = new JSONArray();
+			for (EPackage ePackage: ePackagesList) {
+				if (ePackage.getESuperPackage() == null) {
+					tree.put(createEPackageToc(ePackage, hasDuplicateName(ePackage, ePackagesList), idMap));
+				}
+			}
+			
+			JSONObject toc = new JSONObject();
+			toc.put("idMap", idMap);
+			toc.put("tree", tree);
+			
+			InputStream tocContent = new ByteArrayInputStream(("define("+toc+")").getBytes(StandardCharsets.UTF_8));
+			IFile tocFile = createFile(siteOutput, "toc.js", tocContent, subMonitor.split(1));
+			tocFile.setDerived(true, subMonitor.split(1));						
+			
+			InputStream content = new ByteArrayInputStream(generateIndexHtml().getBytes(StandardCharsets.UTF_8));
+			IFile indexFile = createFile(siteOutput, "index.html", content, subMonitor.split(1));
+			indexFile.setDerived(true, subMonitor.split(1));						
+		}
 		
+	}
+	
+	private String generateIndexHtml() {
+		HTMLFactory htmlFactory = HTMLFactory.INSTANCE;
+		ApplicationPanel appPanel = htmlFactory.applicationPanel()
+				.style(Style.INFO) 
+				.header("Model documentation") // TODO - Configurable.
+				.headerLink("index.html")
+				.style("margin-bottom", "0px")
+				.id("docAppPanel");
 		
+		Table table = htmlFactory.table().style("margin-bottom", "0px");
+		Row row = table.row();
+		DocumentationPanelFactory documentationPanelFactory = new DocumentationPanelFactory(htmlFactory) {
+
+			@Override
+			protected Tag tocDiv() {
+				return super.tocDiv().style("overflow-y", "scroll");
+			}
+			
+		};
+		row.cell(documentationPanelFactory.leftPanel()).id("left-panel").style("min-width", "17em");
+		row.cell("")
+			.id("splitter")
+			.style("width", "5px")
+			.style("min-width", "5px")
+			.style("padding", "0px")
+			.style("background", "#d9edf7")
+			.style("border", "solid 1px #bce8f1")
+			.style("cursor", "col-resize");
+		row.cell(documentationPanelFactory.rightPanel()).id("right-panel");
+				
+		appPanel.contentPanel(
+				table, 
+				htmlFactory.tag(TagName.script, getClass().getResource("Splitter.js")),
+				htmlFactory.tag(TagName.script, getClass().getResource("Scroller.js")),
+				htmlFactory.tag(TagName.script, getClass().getResource("SetDimensions.js")));
+		
+		AutoCloseable app = htmlFactory.bootstrapRouterApplication(
+				Theme.Default,
+				"Documentation", 
+				null, //"main/doc/index.html", 
+				htmlFactory.fragment(
+						// --- Stylesheets ---					
+						htmlFactory.tag(TagName.link)
+							.attribute("rel", "stylesheet")
+							.attribute("href", "resources/bootstrap/css/bootstrap.min.css"),							
+						htmlFactory.tag(TagName.link)
+							.attribute("rel", "stylesheet")
+							.attribute("href", "resources/bootstrap/css/bootstrap-theme.min.css"),							
+						htmlFactory.tag(TagName.link)
+							.attribute("rel", "stylesheet")
+							.attribute("href", "resources/font-awesome/css/font-awesome.min.css"),							
+						htmlFactory.tag(TagName.link)
+							.attribute("rel", "stylesheet")
+							.attribute("href", "resources/css/lightbox.css"),							
+						htmlFactory.tag(TagName.link)
+							.attribute("rel", "stylesheet")
+							.attribute("href", "resources/highlight/styles/github.css"),							
+						htmlFactory.tag(TagName.link)
+							.attribute("rel", "stylesheet")
+							.attribute("href", "resources/css/github-markdown.css"),							
+						htmlFactory.tag(TagName.link)
+							.attribute("rel", "stylesheet")
+							.attribute("href", "resources/jstree/themes/default/style.min.css"),
+							
+						// --- Scripts ---
+						htmlFactory.tag(TagName.script).attribute("src", "resources/js/jquery-1.12.1.min.js"),
+						htmlFactory.tag(TagName.script).attribute("src", "resources/js/underscore-min.js"),
+						htmlFactory.tag(TagName.script).attribute("src", "resources/js/backbone-min.js"),
+						htmlFactory.tag(TagName.script).attribute("src", "resources/bootstrap/js/bootstrap.min.js"),
+						htmlFactory.tag(TagName.script).attribute("src", "resources/js/d3.min.js"), 				
+						htmlFactory.tag(TagName.script).attribute("src", "resources/js/c3.min.js"),												
+						htmlFactory.tag(TagName.script).attribute("src", "resources/js/require.js"),
+						htmlFactory.tag(TagName.script, htmlFactory.interpolate(getClass().getResource("require-config.js"), "base-url", "resources/js")),
+						htmlFactory.tag(TagName.script).attribute("src", "resources/js/lightbox.min.js"),
+						htmlFactory.tag(TagName.script).attribute("src", "resources/highlight/highlight.pack.js")), 				
+				appPanel);
+		
+		return app.toString();
+	}
+
+	private EPackageDocumentationGenerator createEPackageDocumentationGenerator(EPackage ePackage, boolean rewriteURLs) {
+		EPackageDocumentationGenerator ePacakgeDocumentationGenerator = new EPackageDocumentationGenerator(ePackage) {
+			
+			protected String getIconsBaseLocation() {
+				return ICONS_BASE_LOCATION;
+			}
+			
+			protected String markdownToHtml(String markdown) {
+				return GenerateEcoreDocumentationAction.this.markdownToHtml(markdown, rewriteURLs);
+			}
+			
+			protected String preProcessMarkdown(String markdown) {
+				return GenerateEcoreDocumentationAction.this.preProcessMarkdown(markdown);							
+			}
+										
+			@Override
+			protected String getDiagramImageLocation() {
+				if (rewriteURLs) {
+					String packageFolderName = Hex.encodeHexString(getModelElement().getNsURI().getBytes(StandardCharsets.UTF_8));
+					return packageFolderName+"/"+super.getDiagramImageLocation();
+				}
+				
+				return super.getDiagramImageLocation();
+			}
+			
+			protected String getEPackageLocation(EPackage ePackage) {
+				return "#router/doc-content/"+Hex.encodeHexString(ePackage.getNsURI().getBytes(/* UTF-8? */))+"/";
+			}
+			
+		};
+		return ePacakgeDocumentationGenerator;
+	}
+
+	private EDataTypeDocumentationGenerator createEDataTypeDocumentationGenerator(EDataType eDataType, boolean rewriteURLs) {
+		EDataTypeDocumentationGenerator eDataTypeDocumentationGenerator = new EDataTypeDocumentationGenerator(eDataType) {
+			
+			protected String getIconsBaseLocation() {
+				return ICONS_BASE_LOCATION;
+			}
+			
+			protected String markdownToHtml(String markdown) {
+				return GenerateEcoreDocumentationAction.this.markdownToHtml(markdown, rewriteURLs);
+			}
+			
+			protected String preProcessMarkdown(String markdown) {
+				return GenerateEcoreDocumentationAction.this.preProcessMarkdown(markdown);							
+			}
+			
+			protected String getEPackageLocation(EPackage ePackage) {
+				return "#router/doc-content/"+Hex.encodeHexString(ePackage.getNsURI().getBytes(/* UTF-8? */))+"/";
+			}
+			
+		};
+		return eDataTypeDocumentationGenerator;
+	}
+
+	private EEnumDocumentationGenerator createEEnumDocumentationGenerator(EEnum eEnum, boolean rewriteURLs) {
+		EEnumDocumentationGenerator eEnumDocumentationGenerator = new EEnumDocumentationGenerator(eEnum) {
+			
+			protected String getIconsBaseLocation() {
+				return ICONS_BASE_LOCATION;
+			}
+			
+			protected String markdownToHtml(String markdown) {
+				return GenerateEcoreDocumentationAction.this.markdownToHtml(markdown, rewriteURLs);
+			}
+			
+			protected String preProcessMarkdown(String markdown) {
+				return GenerateEcoreDocumentationAction.this.preProcessMarkdown(markdown);							
+			}
+									
+			protected String getEPackageLocation(EPackage ePackage) {
+				return "#router/doc-content/"+Hex.encodeHexString(ePackage.getNsURI().getBytes(/* UTF-8? */))+"/";
+			}
+			
+		};
+		return eEnumDocumentationGenerator;
+	}
+
+	private EClassDocumentationGenerator createEClassDocumentationGenerator(EClass eClass, boolean rewriteURLs) {
+		EClassDocumentationGenerator eClassDocumentationGenerator = new EClassDocumentationGenerator(eClass) {
+			
+			protected String getIconsBaseLocation() {
+				return ICONS_BASE_LOCATION;
+			}
+			
+			protected String markdownToHtml(String markdown) {
+				return GenerateEcoreDocumentationAction.this.markdownToHtml(markdown, rewriteURLs);
+			}
+			
+			protected String preProcessMarkdown(String markdown) {
+				return GenerateEcoreDocumentationAction.this.preProcessMarkdown(markdown);							
+			}
+			
+			@Override
+			protected String getDiagramImageLocation() {
+				if (rewriteURLs) {
+					String packageFolderName = Hex.encodeHexString(getModelElement().getEPackage().getNsURI().getBytes(StandardCharsets.UTF_8));
+					return packageFolderName+"/"+super.getDiagramImageLocation();
+				}
+				
+				return super.getDiagramImageLocation();
+			}
+			
+			protected String getEPackageLocation(EPackage ePackage) {
+				return "#router/doc-content/"+Hex.encodeHexString(ePackage.getNsURI().getBytes(/* UTF-8? */))+"/";
+			}
+			
+		};
+		return eClassDocumentationGenerator;
+	}
+
+	protected String preProcessMarkdown(String content) {
+		List<MarkdownPreProcessor> preProcessors = new ArrayList<>();
+		for (IConfigurationElement ce: Platform.getExtensionRegistry().getConfigurationElementsFor("org.nasdanika.help.extensions")) {
+			// TODO renderers cache to improve performance?
+			if ("markdown-pre-processor".equals(ce.getName())) {
+				try {
+					MarkdownPreProcessor preProcessor = ((MarkdownPreProcessor) ce.createExecutableExtension("class"));
+					preProcessors.add(preProcessor);
+				} catch (CoreException e) {
+					System.err.println("Exception while creating markdown pre-processor");
+					e.printStackTrace();
+				}
+			}
+		}	
+		
+		if (preProcessors.isEmpty() || content == null || content.length()==0) {
+			return "";			
+		}
+		
+		MarkdownPreProcessor.Region.Chain chain = new MarkdownPreProcessor.Region.Chain() {
+			
+			@Override
+			public String process(String content) {
+				return preProcessMarkdown(content);
+			}
+			
+		};
+		
+		List<MarkdownPreProcessor.Region> matchedRegions = new ArrayList<>();
+		for (org.nasdanika.help.markdown.MarkdownPreProcessor pp: preProcessors) {
+			matchedRegions.addAll(pp.match(content));
+		}
+		Collections.sort(matchedRegions, new Comparator<MarkdownPreProcessor.Region>() {
+
+			@Override
+			public int compare(MarkdownPreProcessor.Region r1, MarkdownPreProcessor.Region r2) {
+				if (r1.getStart() == r2.getStart()) {
+					if (r1.getEnd() == r2.getEnd()) {
+						return r1.hashCode() - r2.hashCode();
+					}
+					return r2.getEnd() - r1.getEnd(); // Larger regions get precedence
+				}
+				
+				return r1.getStart() - r2.getStart(); // Earlier regions get precedence
+			}
+		});
+		
+		StringBuilder out = new StringBuilder();
+		int start = 0;
+		for (MarkdownPreProcessor.Region region: matchedRegions) {
+			int regionStart = region.getStart();
+			if (regionStart>=start) {
+				if (regionStart>start) {
+					out.append(content.substring(start, regionStart));
+					start = regionStart;
+				}
+				String result = region.process(chain);
+				if (result != null) {
+					out.append(result);
+					start = region.getEnd();
+				}
+			}
+		}
+		if (start<content.length()) {
+			out.append(content.substring(start));
+		}
+		return out.toString();
+	}
+
+	protected String markdownToHtml(String markdown, boolean rewriteURLs) {
+		MarkdownLinkRenderer markdownLinkRenderer = new ExtensibleMarkdownLinkRenderer() {
+			
+			@Override
+			protected URLRewriter getURLRewriter() {
+				if (rewriteURLs) {
+					return new URLRewriter() {
+						
+						@Override
+						public String rewrite(String url) {
+							
+							// Simple check for absolute links.
+							if (url != null && 
+									(url.toLowerCase().startsWith("mailto:") 
+											|| url.toLowerCase().startsWith("http://") 
+											|| url.toLowerCase().startsWith("https://")
+											|| url.startsWith("/"))) {
+								
+								return url;
+							}
+								
+							// Convert relative links to #router ...
+							return "#router/doc-content/"+url;
+						}
+					};
+				}
+				return super.getURLRewriter();
+			}
+			
+		};
+		return new PegDownProcessor(getMarkdownOptions()).markdownToHtml(preProcessMarkdown(markdown), markdownLinkRenderer);
+	}
+	
+	protected int getMarkdownOptions() {
+		return Extensions.ALL ^ Extensions.HARDWRAPS ^ Extensions.SUPPRESS_HTML_BLOCKS ^ Extensions.SUPPRESS_ALL_HTML;
 	}
 
 	private Element createEPackageTopic(Document document, String prefix, EPackage ePackage, boolean hasDuplicateName) {
@@ -484,7 +817,45 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		}
 		return pTopic;
 	}
-	
+
+	private JSONObject createEPackageToc(EPackage ePackage, boolean hasDuplicateName, JSONObject idMap) {
+		String pLabel = ePackage.getName();
+		if (hasDuplicateName) {
+			pLabel += " ("+ePackage.getNsURI()+")";
+		}
+		JSONObject ret = new JSONObject();
+		ret.put("text", pLabel);
+		ret.put("icon", "resources/images/EPackage.gif");
+		
+		String pid = String.valueOf(idMap.length());
+		ret.put("id", pid);
+		String packageFolderName = Hex.encodeHexString(ePackage.getNsURI().getBytes(StandardCharsets.UTF_8));
+		idMap.put(pid, "#router/doc-content/"+packageFolderName+"/package-summary.html");
+
+		JSONArray children = new JSONArray();
+		ret.put("children", children);
+		
+		List<EPackage> eSubPackages = new ArrayList<>(ePackage.getESubpackages());
+		eSubPackages.sort((a,b) -> a.getName().compareTo(b.getName()));
+		for (EPackage sp: eSubPackages) {
+			children.put(createEPackageToc(sp, false, idMap)); // Don't care about checking duplicate name in sub-packages.
+		}
+		
+		List<EClassifier> eClassifiers = new ArrayList<>(ePackage.getEClassifiers());
+		eClassifiers.sort((a,b) -> a.getName().compareTo(b.getName()));
+		
+		for (EClassifier eClassifier: eClassifiers) {
+			JSONObject cObj = new JSONObject();
+			cObj.put("text", eClassifier.getName());
+			children.put(cObj);
+			String cid = String.valueOf(idMap.length());
+			cObj.put("id", cid);
+			idMap.put(cid, "#router/doc-content/"+packageFolderName+"/"+eClassifier.getName()+".html");					
+			cObj.put("icon", "resources/images/"+eClassifier.eClass().getName()+".gif");
+		}
+		return ret;
+	}
+		
 	private static boolean hasDuplicateName(EPackage ePackage, Collection<EPackage> ePackages) {
 		for (EPackage ep: ePackages) {
 			if (ep != ePackage && ep.getName().equals(ePackage.getName())) {

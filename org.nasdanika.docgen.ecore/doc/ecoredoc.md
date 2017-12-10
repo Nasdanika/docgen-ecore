@@ -25,18 +25,30 @@ toc:
 * ``output`` - outputs to generate
   * ``site`` - static HTML site. Optional.
   * ``help`` - Eclipse Help. Optional. 
-* ``toc`` - relevant only for Eclipse help generation. Contains ``toc`` element attributes such as ``label`` or ``link_to``.  
+* ``toc`` - relevant only for Eclipse help generation. Contains ``toc`` element attributes such as ``label`` or ``link_to``.
+
+Example: 
+
+```yaml
+models:
+  - ../CodegenExamples/model/Sample.ecore
+  
+output:
+  site: /CodegenExamples/site   
+  help: /CodegenExamples/help     
+
+toc:
+  label: Nasdanika
+  link_to: "../org.nasdanika.help/toc.xml#Nasdanika"  
+```  
 
 To generate documentation right-click on the specification file and select "Generate Ecore documentation" menu item.
 
 For Eclipse help register the generated ``toc.xml`` with the help system.
 
-Screenshots - static site and help...
+Please note that the generated site documentation uses AJAX and therefore cannot be served over ``file://`` protocol. 
 
-markdown rendering
+## Roadmap
 
-Plant UML
-
-uml plug-in
-
-GraphViz
+* PlantUML plug-in.
+* Other extensions. 

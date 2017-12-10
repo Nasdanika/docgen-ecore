@@ -95,9 +95,12 @@ import org.yaml.snakeyaml.Yaml;
 
 public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 
-	private static final String ICONS_BASE_LOCATION = "../resources/images/";
+	private static final String HELP_ICONS_BASE_LOCATION = "../resources/images/";
+	private static final String SITE_ICONS_BASE_LOCATION = "resources/images/";
+	
 	private List<IFile> selectedFiles = new ArrayList<>();
 	
+	@SuppressWarnings("serial")
 	private class GenerationException extends RuntimeException {
 
 		GenerationException(String message) {
@@ -575,7 +578,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		EPackageDocumentationGenerator ePacakgeDocumentationGenerator = new EPackageDocumentationGenerator(ePackage) {
 			
 			protected String getIconsBaseLocation() {
-				return ICONS_BASE_LOCATION;
+				return rewriteURLs ? SITE_ICONS_BASE_LOCATION : HELP_ICONS_BASE_LOCATION;
 			}
 			
 			protected String markdownToHtml(String markdown) {
@@ -608,7 +611,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		EDataTypeDocumentationGenerator eDataTypeDocumentationGenerator = new EDataTypeDocumentationGenerator(eDataType) {
 			
 			protected String getIconsBaseLocation() {
-				return ICONS_BASE_LOCATION;
+				return rewriteURLs ? SITE_ICONS_BASE_LOCATION : HELP_ICONS_BASE_LOCATION;
 			}
 			
 			protected String markdownToHtml(String markdown) {
@@ -631,7 +634,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		EEnumDocumentationGenerator eEnumDocumentationGenerator = new EEnumDocumentationGenerator(eEnum) {
 			
 			protected String getIconsBaseLocation() {
-				return ICONS_BASE_LOCATION;
+				return rewriteURLs ? SITE_ICONS_BASE_LOCATION : HELP_ICONS_BASE_LOCATION;
 			}
 			
 			protected String markdownToHtml(String markdown) {
@@ -654,7 +657,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		EClassDocumentationGenerator eClassDocumentationGenerator = new EClassDocumentationGenerator(eClass) {
 			
 			protected String getIconsBaseLocation() {
-				return ICONS_BASE_LOCATION;
+				return rewriteURLs ? SITE_ICONS_BASE_LOCATION : HELP_ICONS_BASE_LOCATION;
 			}
 			
 			protected String markdownToHtml(String markdown) {
@@ -825,7 +828,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		}
 		JSONObject ret = new JSONObject();
 		ret.put("text", pLabel);
-		ret.put("icon", "resources/images/EPackage.gif");
+		ret.put("icon", SITE_ICONS_BASE_LOCATION + "/EPackage.gif");
 		
 		String pid = String.valueOf(idMap.length());
 		ret.put("id", pid);
@@ -851,7 +854,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			String cid = String.valueOf(idMap.length());
 			cObj.put("id", cid);
 			idMap.put(cid, "#router/doc-content/"+packageFolderName+"/"+eClassifier.getName()+".html");					
-			cObj.put("icon", "resources/images/"+eClassifier.eClass().getName()+".gif");
+			cObj.put("icon", SITE_ICONS_BASE_LOCATION + "/"+eClassifier.eClass().getName()+".gif");
 		}
 		return ret;
 	}

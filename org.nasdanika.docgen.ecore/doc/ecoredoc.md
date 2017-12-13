@@ -48,6 +48,10 @@ For Eclipse help register the generated ``toc.xml`` with the help system.
 
 Please note that the generated site documentation uses AJAX and therefore cannot be served over ``file://`` protocol. 
 
+## Requirements
+
+The generator uses [PlantUML](http://plantuml.com/) to generate package and class context diagrams. Therefore it [requires](http://plantuml.com/graphviz-dot) [GraphViz](https://www.graphviz.org/).
+
 ## Roadmap
 
 * PlantUML plug-in.

@@ -97,6 +97,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 
 	private static final String HELP_ICONS_BASE_LOCATION = "../resources/images/";
 	private static final String SITE_ICONS_BASE_LOCATION = "resources/images/";
+	private static final String ENCODED_PACKAGE_NS_URI_TOKEN = "encoded-epackage-ns-uri";
 	
 	private List<IFile> selectedFiles = new ArrayList<>();
 	
@@ -163,6 +164,23 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			throw new GenerationException("'models' should be a list");
 		}
 		
+		// References to external locations of documentation.
+		Map<String, String> siteModeldocs = Collections.emptyMap();
+		Map<String, String> helpModeldocs = Collections.emptyMap();
+		
+		Object modeldocs = specMap.get("modeldocs");
+		if (modeldocs instanceof Map) {
+			Object smd = ((Map<?,?>) modeldocs).get("site");
+			if (smd instanceof Map) {
+				siteModeldocs = (Map<String, String>) smd;
+			}
+			
+			Object hmd = ((Map<?,?>) modeldocs).get("help");
+			if (hmd instanceof Map) {
+				helpModeldocs = (Map<String, String>) hmd;
+			}
+		}
+		
 		Object output = specMap.get("output");
 		if (output == null) {
 			throw new GenerationException("output is not specified");
@@ -200,7 +218,8 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 
 		URI base = URI.createPlatformResourceURI(specPath, true);
 		
-		Set<EPackage> ePackages = new HashSet<>();
+		Set<EPackage> eSitePackages = new HashSet<>();
+		Set<EPackage> eHelpPackages = new HashSet<>();
 		for (String model: (Iterable<String>) models) {			
 			URI uri = URI.createURI(model);
 			if (uri.isRelative() && base != null && base.isHierarchical()) {
@@ -211,17 +230,30 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			while (cit.hasNext()) {
 				EObject next = cit.next();
 				if (next instanceof EPackage) {
-					load((EPackage) next, ePackages);
+					if (!siteModeldocs.containsKey(((EPackage) next).getNsURI())) {
+						load((EPackage) next, eSitePackages);
+					}
+					if (!helpModeldocs.containsKey(((EPackage) next).getNsURI())) {
+						load((EPackage) next, eHelpPackages);
+					}
 				} else if (next instanceof GenPackage) {
-					load((GenPackage) next, ePackages);
+					if (!siteModeldocs.containsKey(((GenPackage) next).getEcorePackage().getNsURI())) {
+						load((GenPackage) next, eSitePackages);
+					}
+					if (!helpModeldocs.containsKey(((GenPackage) next).getEcorePackage().getNsURI())) {
+						load((GenPackage) next, eHelpPackages);
+					}
 				}
 			}
 		}
 		
-		List<EPackage> ePackagesList = new ArrayList<>(ePackages);
-		ePackagesList.sort((a,b) -> a.getName().equals(b.getName()) ? a.getNsURI().compareTo(b.getNsURI()) : a.getName().compareTo(b.getName()) );
+		List<EPackage> eSitePackagesList = new ArrayList<>(eSitePackages);
+		eSitePackagesList.sort((a,b) -> a.getName().equals(b.getName()) ? a.getNsURI().compareTo(b.getNsURI()) : a.getName().compareTo(b.getName()) );
 		
-		int totalWork = ePackages.size();
+		List<EPackage> eHelpPackagesList = new ArrayList<>(eHelpPackages);
+		eHelpPackagesList.sort((a,b) -> a.getName().equals(b.getName()) ? a.getNsURI().compareTo(b.getNsURI()) : a.getName().compareTo(b.getName()) );
+		
+		int totalWork = eSitePackages.size() + eHelpPackages.size();
 		if (siteOutput != null) {
 			totalWork += siteOutput.members().length + 2;
 		}
@@ -315,7 +347,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		Map<EClassifier, String> siteFileNameMap = new HashMap<EClassifier, String>();
 		
 		
-		// Packages
+		// Site packages
 		for (EPackage ePackage: ePackagesList) {
 			List<EClassifier> eClassifiers = new ArrayList<>(ePackage.getEClassifiers());
 			eClassifiers.sort((a,b) -> a.getName().compareTo(b.getName()));
@@ -350,7 +382,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 				
 				if (eClassifier instanceof EClass) {				
 					if (packageSiteOutputFolder != null) {
-						EClassDocumentationGenerator eClassDocumentationGenerator = createEClassDocumentationGenerator((EClass) eClassifier, true);
+						EClassDocumentationGenerator eClassDocumentationGenerator = createEClassDocumentationGenerator((EClass) eClassifier, true, siteModeldocs);
 						siteClassifierDocumentation = eClassDocumentationGenerator.generateDocumentation();
 						siteClassifierDocumentationFileName = eClassDocumentationGenerator.getNamedElementFileName(eClassifier);
 						siteFileNameMap.put(eClassifier, siteClassifierDocumentationFileName);
@@ -361,7 +393,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 					}
 					
 					if (packageHelpOutputFolder != null) {
-						EClassDocumentationGenerator eClassDocumentationGenerator = createEClassDocumentationGenerator((EClass) eClassifier, false);
+						EClassDocumentationGenerator eClassDocumentationGenerator = createEClassDocumentationGenerator((EClass) eClassifier, false, helpModeldocs);
 						helpClassifierDocumentationFileName = eClassDocumentationGenerator.getNamedElementFileName(eClassifier);
 						helpClassifierDocumentation = eClassDocumentationGenerator.generateDocumentation();
 						helpFileNameMap.put(eClassifier, helpClassifierDocumentationFileName);
@@ -372,27 +404,27 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 					}					
 				} else if (eClassifier instanceof EEnum) {
 					if (packageSiteOutputFolder != null) {
-						EEnumDocumentationGenerator eEnumDocumentationGenerator = createEEnumDocumentationGenerator((EEnum) eClassifier, true);
+						EEnumDocumentationGenerator eEnumDocumentationGenerator = createEEnumDocumentationGenerator((EEnum) eClassifier, true, siteModeldocs);
 						siteClassifierDocumentationFileName = eEnumDocumentationGenerator.getNamedElementFileName(eClassifier);
 						siteFileNameMap.put(eClassifier, siteClassifierDocumentationFileName);
 						siteClassifierDocumentation = eEnumDocumentationGenerator.generateDocumentation();
 					}
 					if (packageHelpOutputFolder != null) {
-						EEnumDocumentationGenerator eEnumDocumentationGenerator = createEEnumDocumentationGenerator((EEnum) eClassifier, false);
+						EEnumDocumentationGenerator eEnumDocumentationGenerator = createEEnumDocumentationGenerator((EEnum) eClassifier, false, helpModeldocs);
 						helpClassifierDocumentationFileName = eEnumDocumentationGenerator.getNamedElementFileName(eClassifier);
 						helpFileNameMap.put(eClassifier, helpClassifierDocumentationFileName);
 						helpClassifierDocumentation = eEnumDocumentationGenerator.generateDocumentation();
 					}					
 				} else { // EDataType
 					if (packageSiteOutputFolder != null) {
-						EDataTypeDocumentationGenerator eDataTypeDocumentationGenerator = createEDataTypeDocumentationGenerator((EDataType) eClassifier, true);
+						EDataTypeDocumentationGenerator eDataTypeDocumentationGenerator = createEDataTypeDocumentationGenerator((EDataType) eClassifier, true, siteModeldocs);
 						siteClassifierDocumentationFileName = eDataTypeDocumentationGenerator.getNamedElementFileName(eClassifier);
 						siteFileNameMap.put(eClassifier, siteClassifierDocumentationFileName);
 						siteClassifierDocumentation = eDataTypeDocumentationGenerator.generateDocumentation();
 					}
 					
 					if (packageHelpOutputFolder != null) {
-						EDataTypeDocumentationGenerator eDataTypeDocumentationGenerator = createEDataTypeDocumentationGenerator((EDataType) eClassifier, false);
+						EDataTypeDocumentationGenerator eDataTypeDocumentationGenerator = createEDataTypeDocumentationGenerator((EDataType) eClassifier, false, helpModeldocs);
 						helpClassifierDocumentationFileName = eDataTypeDocumentationGenerator.getNamedElementFileName(eClassifier);
 						helpFileNameMap.put(eClassifier, helpClassifierDocumentationFileName);
 						helpClassifierDocumentation = eDataTypeDocumentationGenerator.generateDocumentation();
@@ -421,7 +453,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			if (packageSiteOutputFolder == null) {
 				packageMonitor.worked(4);
 			} else {
-				EPackageDocumentationGenerator ePacakgeDocumentationGenerator = createEPackageDocumentationGenerator(ePackage, true);
+				EPackageDocumentationGenerator ePacakgeDocumentationGenerator = createEPackageDocumentationGenerator(ePackage, true, siteModeldocs);
 				String ePackageDocumentation = ePacakgeDocumentationGenerator.generateDocumentation();
 				InputStream content = new ByteArrayInputStream(ePackageDocumentation.getBytes(StandardCharsets.UTF_8));
 				IFile ePackageSiteFile = createFile(packageSiteOutputFolder, "package-summary.html", content, packageMonitor.split(1));
@@ -437,7 +469,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			if (packageHelpOutputFolder == null) {
 				packageMonitor.worked(4);
 			} else {
-				EPackageDocumentationGenerator ePacakgeDocumentationGenerator = createEPackageDocumentationGenerator(ePackage, false);
+				EPackageDocumentationGenerator ePacakgeDocumentationGenerator = createEPackageDocumentationGenerator(ePackage, false, helpModeldocs);
 				String ePackageDocumentation = ePacakgeDocumentationGenerator.generateDocumentation();
 				String wrappedDocumentation = HTMLFactory.INSTANCE.interpolate(GenerateEcoreDocumentationAction.class.getResource("help-page-template.html"), "content", ePackageDocumentation);
 				InputStream content = new ByteArrayInputStream(wrappedDocumentation.getBytes(StandardCharsets.UTF_8));
@@ -451,6 +483,8 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			}
 			
 		}
+		
+		
 				
 		// toc.xml
 		if (helpOutput != null) {
@@ -598,7 +632,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		return app.toString();
 	}
 
-	private EPackageDocumentationGenerator createEPackageDocumentationGenerator(EPackage ePackage, boolean rewriteURLs) {
+	private EPackageDocumentationGenerator createEPackageDocumentationGenerator(EPackage ePackage, boolean rewriteURLs, Map<String, String> modeldocs) {
 		EPackageDocumentationGenerator ePacakgeDocumentationGenerator = new EPackageDocumentationGenerator(ePackage) {
 			
 			protected String getIconsBaseLocation() {
@@ -616,22 +650,29 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			@Override
 			protected String getDiagramImageLocation() {
 				if (rewriteURLs) {
-					String packageFolderName = Hex.encodeHexString(getModelElement().getNsURI().getBytes(StandardCharsets.UTF_8));
-					return packageFolderName+"/"+super.getDiagramImageLocation();
+					return getNamedElementFileName(getModelElement())+"/"+super.getDiagramImageLocation();
 				}
 				
 				return super.getDiagramImageLocation();
 			}
 			
 			protected String getEPackageLocation(EPackage ePackage) {
-				return "#router/doc-content/"+Hex.encodeHexString(ePackage.getNsURI().getBytes(/* UTF-8? */))+"/";
+				String modeldoc = modeldocs.get(ePackage.getNsURI());
+				if (modeldoc != null) {
+					if (!modeldoc.endsWith("/")) {
+						modeldoc += "/";
+					}
+					return HTMLFactory.INSTANCE.interpolate(modeldoc, ENCODED_PACKAGE_NS_URI_TOKEN, getNamedElementFileName(ePackage));
+				}
+				
+				return rewriteURLs ? "#router/doc-content/"+getNamedElementFileName(ePackage)+"/" : super.getEPackageLocation(ePackage);
 			}
 			
 		};
 		return ePacakgeDocumentationGenerator;
 	}
 
-	private EDataTypeDocumentationGenerator createEDataTypeDocumentationGenerator(EDataType eDataType, boolean rewriteURLs) {
+	private EDataTypeDocumentationGenerator createEDataTypeDocumentationGenerator(EDataType eDataType, boolean rewriteURLs, Map<String, String> modeldocs) {
 		EDataTypeDocumentationGenerator eDataTypeDocumentationGenerator = new EDataTypeDocumentationGenerator(eDataType) {
 			
 			protected String getIconsBaseLocation() {
@@ -647,14 +688,22 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			}
 			
 			protected String getEPackageLocation(EPackage ePackage) {
-				return "#router/doc-content/"+Hex.encodeHexString(ePackage.getNsURI().getBytes(/* UTF-8? */))+"/";
+				String modeldoc = modeldocs.get(ePackage.getNsURI());
+				if (modeldoc != null) {
+					if (!modeldoc.endsWith("/")) {
+						modeldoc += "/";
+					}
+					return HTMLFactory.INSTANCE.interpolate(modeldoc, ENCODED_PACKAGE_NS_URI_TOKEN, getNamedElementFileName(ePackage));
+				}
+				
+				return rewriteURLs ? "#router/doc-content/"+getNamedElementFileName(ePackage)+"/" : super.getEPackageLocation(ePackage);
 			}
 			
 		};
 		return eDataTypeDocumentationGenerator;
 	}
 
-	private EEnumDocumentationGenerator createEEnumDocumentationGenerator(EEnum eEnum, boolean rewriteURLs) {
+	private EEnumDocumentationGenerator createEEnumDocumentationGenerator(EEnum eEnum, boolean rewriteURLs, Map<String, String> modeldocs) {
 		EEnumDocumentationGenerator eEnumDocumentationGenerator = new EEnumDocumentationGenerator(eEnum) {
 			
 			protected String getIconsBaseLocation() {
@@ -670,14 +719,22 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			}
 									
 			protected String getEPackageLocation(EPackage ePackage) {
-				return "#router/doc-content/"+Hex.encodeHexString(ePackage.getNsURI().getBytes(/* UTF-8? */))+"/";
+				String modeldoc = modeldocs.get(ePackage.getNsURI());
+				if (modeldoc != null) {
+					if (!modeldoc.endsWith("/")) {
+						modeldoc += "/";
+					}
+					return HTMLFactory.INSTANCE.interpolate(modeldoc, ENCODED_PACKAGE_NS_URI_TOKEN, getNamedElementFileName(ePackage));
+				}
+				
+				return rewriteURLs ? "#router/doc-content/"+getNamedElementFileName(ePackage)+"/" : super.getEPackageLocation(ePackage);
 			}
 			
 		};
 		return eEnumDocumentationGenerator;
 	}
 
-	private EClassDocumentationGenerator createEClassDocumentationGenerator(EClass eClass, boolean rewriteURLs) {
+	private EClassDocumentationGenerator createEClassDocumentationGenerator(EClass eClass, boolean rewriteURLs, Map<String, String> modeldocs) {
 		EClassDocumentationGenerator eClassDocumentationGenerator = new EClassDocumentationGenerator(eClass) {
 			
 			protected String getIconsBaseLocation() {
@@ -702,7 +759,15 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			}
 			
 			protected String getEPackageLocation(EPackage ePackage) {
-				return "#router/doc-content/"+Hex.encodeHexString(ePackage.getNsURI().getBytes(/* UTF-8? */))+"/";
+				String modeldoc = modeldocs.get(ePackage.getNsURI());
+				if (modeldoc != null) {
+					if (!modeldoc.endsWith("/")) {
+						modeldoc += "/";
+					}
+					return HTMLFactory.INSTANCE.interpolate(modeldoc, ENCODED_PACKAGE_NS_URI_TOKEN, getNamedElementFileName(ePackage));
+				}
+				
+				return rewriteURLs ? "#router/doc-content/"+getNamedElementFileName(ePackage)+"/" : super.getEPackageLocation(ePackage);
 			}
 			
 		};

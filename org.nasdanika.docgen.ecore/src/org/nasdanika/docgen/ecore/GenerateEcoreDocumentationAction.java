@@ -2,6 +2,7 @@ package org.nasdanika.docgen.ecore;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
@@ -230,19 +231,11 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			while (cit.hasNext()) {
 				EObject next = cit.next();
 				if (next instanceof EPackage) {
-					if (!siteModeldocs.containsKey(((EPackage) next).getNsURI())) {
-						load((EPackage) next, eSitePackages);
-					}
-					if (!helpModeldocs.containsKey(((EPackage) next).getNsURI())) {
-						load((EPackage) next, eHelpPackages);
-					}
+					load((EPackage) next, eSitePackages, siteModeldocs.keySet());
+					load((EPackage) next, eHelpPackages, helpModeldocs.keySet());
 				} else if (next instanceof GenPackage) {
-					if (!siteModeldocs.containsKey(((GenPackage) next).getEcorePackage().getNsURI())) {
-						load((GenPackage) next, eSitePackages);
-					}
-					if (!helpModeldocs.containsKey(((GenPackage) next).getEcorePackage().getNsURI())) {
-						load((GenPackage) next, eHelpPackages);
-					}
+					load((GenPackage) next, eSitePackages, siteModeldocs.keySet());
+					load((GenPackage) next, eHelpPackages, helpModeldocs.keySet());
 				}
 			}
 		}
@@ -343,151 +336,9 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			}
 		}		
 		
-		Map<EClassifier, String> helpFileNameMap = new HashMap<EClassifier, String>();
-		Map<EClassifier, String> siteFileNameMap = new HashMap<EClassifier, String>();
-		
-		
-		// Site packages
-		for (EPackage ePackage: ePackagesList) {
-			List<EClassifier> eClassifiers = new ArrayList<>(ePackage.getEClassifiers());
-			eClassifiers.sort((a,b) -> a.getName().compareTo(b.getName()));
-			SubMonitor packageMonitor = SubMonitor.convert(subMonitor.split(1), eClassifiers.size()*4+11);
-			packageMonitor.setTaskName("EPackage " + ePackage.getName() + " ("+ePackage.getNsURI()+")");
-			String packageFolderName = Hex.encodeHexString(ePackage.getNsURI().getBytes(StandardCharsets.UTF_8));
-			
-			IFolder packageSiteOutputFolder = siteOutput == null ? null : createFolder(siteOutput, packageFolderName, packageMonitor.split(1));
-			IFolder packageHelpOutputFolder = helpOutput == null ? null : createFolder(helpOutput, packageFolderName, packageMonitor.split(1));
-			
-			if (packageSiteOutputFolder == null) {
-				packageMonitor.worked(2);
-			} else {
-				packageSiteOutputFolder.setDerived(true, packageMonitor.split(1));
-			}
-			
-			if (packageHelpOutputFolder == null) {
-				packageMonitor.worked(2);
-			} else {
-				packageHelpOutputFolder.setDerived(true, packageMonitor.split(1));				
-			}
-			
-			for (EClassifier eClassifier: eClassifiers) {
-				monitor.subTask(eClassifier.eClass().getName()+" "+eClassifier.getName());
-				// classifier doc
-				
-				String siteClassifierDocumentation = null;
-				String siteClassifierDocumentationFileName = null;
-				
-				String helpClassifierDocumentation = null;
-				String helpClassifierDocumentationFileName = null;
-				
-				if (eClassifier instanceof EClass) {				
-					if (packageSiteOutputFolder != null) {
-						EClassDocumentationGenerator eClassDocumentationGenerator = createEClassDocumentationGenerator((EClass) eClassifier, true, siteModeldocs);
-						siteClassifierDocumentation = eClassDocumentationGenerator.generateDocumentation();
-						siteClassifierDocumentationFileName = eClassDocumentationGenerator.getNamedElementFileName(eClassifier);
-						siteFileNameMap.put(eClassifier, siteClassifierDocumentationFileName);
-						ByteArrayOutputStream imgContent = new ByteArrayOutputStream();
-						eClassDocumentationGenerator.generateDiagram(false, null, 1, RelationshipDirection.both, true, true, imgContent);				
-						IFile eClassSiteDiagramFile = createFile(packageSiteOutputFolder, siteClassifierDocumentationFileName+".png", new ByteArrayInputStream(imgContent.toByteArray()), packageMonitor.split(1));
-						eClassSiteDiagramFile.setDerived(true, packageMonitor.split(1));
-					}
-					
-					if (packageHelpOutputFolder != null) {
-						EClassDocumentationGenerator eClassDocumentationGenerator = createEClassDocumentationGenerator((EClass) eClassifier, false, helpModeldocs);
-						helpClassifierDocumentationFileName = eClassDocumentationGenerator.getNamedElementFileName(eClassifier);
-						helpClassifierDocumentation = eClassDocumentationGenerator.generateDocumentation();
-						helpFileNameMap.put(eClassifier, helpClassifierDocumentationFileName);
-						ByteArrayOutputStream imgContent = new ByteArrayOutputStream();
-						eClassDocumentationGenerator.generateDiagram(false, null, 1, RelationshipDirection.both, true, true, imgContent);						
-						IFile eClassHelpDiagramFile = createFile(packageHelpOutputFolder, helpClassifierDocumentationFileName+".png", new ByteArrayInputStream(imgContent.toByteArray()), packageMonitor.split(1));
-						eClassHelpDiagramFile.setDerived(true, packageMonitor.split(1));
-					}					
-				} else if (eClassifier instanceof EEnum) {
-					if (packageSiteOutputFolder != null) {
-						EEnumDocumentationGenerator eEnumDocumentationGenerator = createEEnumDocumentationGenerator((EEnum) eClassifier, true, siteModeldocs);
-						siteClassifierDocumentationFileName = eEnumDocumentationGenerator.getNamedElementFileName(eClassifier);
-						siteFileNameMap.put(eClassifier, siteClassifierDocumentationFileName);
-						siteClassifierDocumentation = eEnumDocumentationGenerator.generateDocumentation();
-					}
-					if (packageHelpOutputFolder != null) {
-						EEnumDocumentationGenerator eEnumDocumentationGenerator = createEEnumDocumentationGenerator((EEnum) eClassifier, false, helpModeldocs);
-						helpClassifierDocumentationFileName = eEnumDocumentationGenerator.getNamedElementFileName(eClassifier);
-						helpFileNameMap.put(eClassifier, helpClassifierDocumentationFileName);
-						helpClassifierDocumentation = eEnumDocumentationGenerator.generateDocumentation();
-					}					
-				} else { // EDataType
-					if (packageSiteOutputFolder != null) {
-						EDataTypeDocumentationGenerator eDataTypeDocumentationGenerator = createEDataTypeDocumentationGenerator((EDataType) eClassifier, true, siteModeldocs);
-						siteClassifierDocumentationFileName = eDataTypeDocumentationGenerator.getNamedElementFileName(eClassifier);
-						siteFileNameMap.put(eClassifier, siteClassifierDocumentationFileName);
-						siteClassifierDocumentation = eDataTypeDocumentationGenerator.generateDocumentation();
-					}
-					
-					if (packageHelpOutputFolder != null) {
-						EDataTypeDocumentationGenerator eDataTypeDocumentationGenerator = createEDataTypeDocumentationGenerator((EDataType) eClassifier, false, helpModeldocs);
-						helpClassifierDocumentationFileName = eDataTypeDocumentationGenerator.getNamedElementFileName(eClassifier);
-						helpFileNameMap.put(eClassifier, helpClassifierDocumentationFileName);
-						helpClassifierDocumentation = eDataTypeDocumentationGenerator.generateDocumentation();
-					}
-				}
-				
-				if (packageSiteOutputFolder == null) {
-					packageMonitor.worked(2);
-				} else {
-					InputStream content = new ByteArrayInputStream(siteClassifierDocumentation.getBytes(StandardCharsets.UTF_8));
-					IFile eClassifierSiteFile = createFile(packageSiteOutputFolder, siteClassifierDocumentationFileName+".html", content, packageMonitor.split(1));
-					eClassifierSiteFile.setDerived(true, packageMonitor.split(1));
-				}
-				
-				if (packageHelpOutputFolder == null) {
-					packageMonitor.worked(2);
-				} else {
-					String wrappedDocumentation = HTMLFactory.INSTANCE.interpolate(GenerateEcoreDocumentationAction.class.getResource("help-page-template.html"), "content", helpClassifierDocumentation);
-					InputStream content = new ByteArrayInputStream(wrappedDocumentation.getBytes(StandardCharsets.UTF_8));
-					IFile eClassifierHelpFile = createFile(packageHelpOutputFolder, helpClassifierDocumentationFileName+".html", content, packageMonitor.split(1));
-					eClassifierHelpFile.setDerived(true, packageMonitor.split(1));
-				}
-			}
-
-			// package doc			
-			if (packageSiteOutputFolder == null) {
-				packageMonitor.worked(4);
-			} else {
-				EPackageDocumentationGenerator ePacakgeDocumentationGenerator = createEPackageDocumentationGenerator(ePackage, true, siteModeldocs);
-				String ePackageDocumentation = ePacakgeDocumentationGenerator.generateDocumentation();
-				InputStream content = new ByteArrayInputStream(ePackageDocumentation.getBytes(StandardCharsets.UTF_8));
-				IFile ePackageSiteFile = createFile(packageSiteOutputFolder, "package-summary.html", content, packageMonitor.split(1));
-				ePackageSiteFile.setDerived(true, packageMonitor.split(1));
-				
-				ByteArrayOutputStream imgContent = new ByteArrayOutputStream();
-				ePacakgeDocumentationGenerator.generateDiagram(false, null, 0, RelationshipDirection.both, true, true, imgContent);				
-				IFile ePackageSiteDiagramFile = createFile(packageSiteOutputFolder, "package-summary.png", new ByteArrayInputStream(imgContent.toByteArray()), packageMonitor.split(1));
-				ePackageSiteDiagramFile.setDerived(true, packageMonitor.split(1));
-				
-			}
-
-			if (packageHelpOutputFolder == null) {
-				packageMonitor.worked(4);
-			} else {
-				EPackageDocumentationGenerator ePacakgeDocumentationGenerator = createEPackageDocumentationGenerator(ePackage, false, helpModeldocs);
-				String ePackageDocumentation = ePacakgeDocumentationGenerator.generateDocumentation();
-				String wrappedDocumentation = HTMLFactory.INSTANCE.interpolate(GenerateEcoreDocumentationAction.class.getResource("help-page-template.html"), "content", ePackageDocumentation);
-				InputStream content = new ByteArrayInputStream(wrappedDocumentation.getBytes(StandardCharsets.UTF_8));
-				IFile ePackageHelpFile = createFile(packageHelpOutputFolder, "package-summary.html", content, packageMonitor.split(1));
-				ePackageHelpFile.setDerived(true, packageMonitor.split(1));
-				
-				ByteArrayOutputStream imgContent = new ByteArrayOutputStream();
-				ePacakgeDocumentationGenerator.generateDiagram(false, null, 0, RelationshipDirection.both, true, true, imgContent);				
-				IFile ePackageHelpDiagramFile = createFile(packageHelpOutputFolder, "package-summary.png", new ByteArrayInputStream(imgContent.toByteArray()), packageMonitor.split(1));
-				ePackageHelpDiagramFile.setDerived(true, packageMonitor.split(1));				
-			}
-			
-		}
-		
-		
-				
-		// toc.xml
 		if (helpOutput != null) {
+			Map<EClassifier, String> helpFileNameMap = generateHelp(eHelpPackagesList, helpModeldocs, helpOutput, subMonitor);
+			
 			DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
 			DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
 			Document toc = dBuilder.newDocument();
@@ -504,9 +355,9 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 				}
 			}
 			
-			for (EPackage ePackage: ePackagesList) {
+			for (EPackage ePackage: eHelpPackagesList) {
 				if (ePackage.getESuperPackage() == null) {
-					root.appendChild(createEPackageTopic(toc, prefix, ePackage, hasDuplicateName(ePackage, ePackagesList), helpFileNameMap));
+					root.appendChild(createEPackageTopic(toc, prefix, ePackage, hasDuplicateName(ePackage, eHelpPackagesList), helpFileNameMap));
 				}
 			}
 			
@@ -527,13 +378,14 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		}
 		
 		
-		// Site index.html - tree - pkg, classifiers, splitter, content, router, title.
 		if (siteOutput != null) {
+			Map<EClassifier, String> siteFileNameMap = generateSite(eSitePackagesList, siteModeldocs, siteOutput, subMonitor);
+			
 			final JSONObject idMap = new JSONObject();
 			JSONArray tree = new JSONArray();
-			for (EPackage ePackage: ePackagesList) {
+			for (EPackage ePackage: eSitePackagesList) {
 				if (ePackage.getESuperPackage() == null) {
-					tree.put(createEPackageToc(ePackage, hasDuplicateName(ePackage, ePackagesList), idMap, siteFileNameMap));
+					tree.put(createEPackageToc(ePackage, hasDuplicateName(ePackage, eSitePackagesList), idMap, siteFileNameMap));
 				}
 			}
 			
@@ -550,6 +402,139 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			indexFile.setDerived(true, subMonitor.split(1));						
 		}
 		
+	}
+
+	private Map<EClassifier, String> generateSite(
+			List<EPackage> eSitePackagesList,
+			Map<String, String> siteModeldocs,
+			IFolder siteOutput, 
+			SubMonitor subMonitor) throws CoreException, IOException {
+		
+		Map<EClassifier, String> siteFileNameMap = new HashMap<EClassifier, String>();
+		for (EPackage ePackage: eSitePackagesList) {
+			List<EClassifier> eClassifiers = new ArrayList<>(ePackage.getEClassifiers());
+			eClassifiers.sort((a,b) -> a.getName().compareTo(b.getName()));
+			SubMonitor packageMonitor = SubMonitor.convert(subMonitor.split(1), eClassifiers.size()*2+6);
+			packageMonitor.setTaskName("Site, EPackage " + ePackage.getName() + " ("+ePackage.getNsURI()+")");
+			String packageFolderName = Hex.encodeHexString(ePackage.getNsURI().getBytes(StandardCharsets.UTF_8));
+			
+			IFolder packageSiteOutputFolder = createFolder(siteOutput, packageFolderName, packageMonitor.split(1));
+			packageSiteOutputFolder.setDerived(true, packageMonitor.split(1));
+			
+			for (EClassifier eClassifier: eClassifiers) {
+				packageMonitor.subTask(eClassifier.eClass().getName()+" "+eClassifier.getName());
+				// classifier doc
+				
+				String siteClassifierDocumentation = null;
+				String siteClassifierDocumentationFileName = null;
+				
+				if (eClassifier instanceof EClass) {				
+					EClassDocumentationGenerator eClassDocumentationGenerator = createEClassDocumentationGenerator((EClass) eClassifier, true, siteModeldocs);
+					siteClassifierDocumentation = eClassDocumentationGenerator.generateDocumentation();
+					siteClassifierDocumentationFileName = eClassDocumentationGenerator.getNamedElementFileName(eClassifier);
+					siteFileNameMap.put(eClassifier, siteClassifierDocumentationFileName);
+					ByteArrayOutputStream imgContent = new ByteArrayOutputStream();
+					eClassDocumentationGenerator.generateDiagram(false, null, 1, RelationshipDirection.both, true, true, imgContent);				
+					IFile eClassSiteDiagramFile = createFile(packageSiteOutputFolder, siteClassifierDocumentationFileName+".png", new ByteArrayInputStream(imgContent.toByteArray()), packageMonitor.split(1));
+					eClassSiteDiagramFile.setDerived(true, packageMonitor.split(1));
+				} else if (eClassifier instanceof EEnum) {
+					EEnumDocumentationGenerator eEnumDocumentationGenerator = createEEnumDocumentationGenerator((EEnum) eClassifier, true, siteModeldocs);
+					siteClassifierDocumentationFileName = eEnumDocumentationGenerator.getNamedElementFileName(eClassifier);
+					siteFileNameMap.put(eClassifier, siteClassifierDocumentationFileName);
+					siteClassifierDocumentation = eEnumDocumentationGenerator.generateDocumentation();
+				} else { // EDataType
+					EDataTypeDocumentationGenerator eDataTypeDocumentationGenerator = createEDataTypeDocumentationGenerator((EDataType) eClassifier, true, siteModeldocs);
+					siteClassifierDocumentationFileName = eDataTypeDocumentationGenerator.getNamedElementFileName(eClassifier);
+					siteFileNameMap.put(eClassifier, siteClassifierDocumentationFileName);
+					siteClassifierDocumentation = eDataTypeDocumentationGenerator.generateDocumentation();
+				}
+				
+				if (packageSiteOutputFolder == null) {
+					packageMonitor.worked(2);
+				} else {
+					InputStream content = new ByteArrayInputStream(siteClassifierDocumentation.getBytes(StandardCharsets.UTF_8));
+					IFile eClassifierSiteFile = createFile(packageSiteOutputFolder, siteClassifierDocumentationFileName+".html", content, packageMonitor.split(1));
+					eClassifierSiteFile.setDerived(true, packageMonitor.split(1));
+				}
+			}
+
+			EPackageDocumentationGenerator ePacakgeDocumentationGenerator = createEPackageDocumentationGenerator(ePackage, true, siteModeldocs);
+			String ePackageDocumentation = ePacakgeDocumentationGenerator.generateDocumentation();
+			InputStream content = new ByteArrayInputStream(ePackageDocumentation.getBytes(StandardCharsets.UTF_8));
+			IFile ePackageSiteFile = createFile(packageSiteOutputFolder, "package-summary.html", content, packageMonitor.split(1));
+			ePackageSiteFile.setDerived(true, packageMonitor.split(1));
+			
+			ByteArrayOutputStream imgContent = new ByteArrayOutputStream();
+			ePacakgeDocumentationGenerator.generateDiagram(false, null, 0, RelationshipDirection.both, true, true, imgContent);				
+			IFile ePackageSiteDiagramFile = createFile(packageSiteOutputFolder, "package-summary.png", new ByteArrayInputStream(imgContent.toByteArray()), packageMonitor.split(1));
+			ePackageSiteDiagramFile.setDerived(true, packageMonitor.split(1));
+		}
+		return siteFileNameMap;
+	}
+	
+	private Map<EClassifier, String> generateHelp(
+			List<EPackage> eHelpPackagesList,
+			Map<String, String> helpModeldocs, 
+			IFolder helpOutput, 
+			SubMonitor subMonitor) throws CoreException, IOException {
+		
+		Map<EClassifier, String> helpFileNameMap = new HashMap<EClassifier, String>();
+		for (EPackage ePackage: eHelpPackagesList) {
+			List<EClassifier> eClassifiers = new ArrayList<>(ePackage.getEClassifiers());
+			eClassifiers.sort((a,b) -> a.getName().compareTo(b.getName()));
+			SubMonitor packageMonitor = SubMonitor.convert(subMonitor.split(1), eClassifiers.size()*4+11);
+			packageMonitor.setTaskName("Help, EPackage " + ePackage.getName() + " ("+ePackage.getNsURI()+")");
+			String packageFolderName = Hex.encodeHexString(ePackage.getNsURI().getBytes(StandardCharsets.UTF_8));
+			IFolder packageHelpOutputFolder = createFolder(helpOutput, packageFolderName, packageMonitor.split(1));
+			packageHelpOutputFolder.setDerived(true, packageMonitor.split(1));				
+			
+			for (EClassifier eClassifier: eClassifiers) {
+				packageMonitor.subTask(eClassifier.eClass().getName()+" "+eClassifier.getName());
+				// classifier doc
+				
+				String helpClassifierDocumentation = null;
+				String helpClassifierDocumentationFileName = null;
+				
+				if (eClassifier instanceof EClass) {				
+					EClassDocumentationGenerator eClassDocumentationGenerator = createEClassDocumentationGenerator((EClass) eClassifier, false, helpModeldocs);
+					helpClassifierDocumentationFileName = eClassDocumentationGenerator.getNamedElementFileName(eClassifier);
+					helpClassifierDocumentation = eClassDocumentationGenerator.generateDocumentation();
+					helpFileNameMap.put(eClassifier, helpClassifierDocumentationFileName);
+					ByteArrayOutputStream imgContent = new ByteArrayOutputStream();
+					eClassDocumentationGenerator.generateDiagram(false, null, 1, RelationshipDirection.both, true, true, imgContent);						
+					IFile eClassHelpDiagramFile = createFile(packageHelpOutputFolder, helpClassifierDocumentationFileName+".png", new ByteArrayInputStream(imgContent.toByteArray()), packageMonitor.split(1));
+					eClassHelpDiagramFile.setDerived(true, packageMonitor.split(1));
+				} else if (eClassifier instanceof EEnum) {
+					EEnumDocumentationGenerator eEnumDocumentationGenerator = createEEnumDocumentationGenerator((EEnum) eClassifier, false, helpModeldocs);
+					helpClassifierDocumentationFileName = eEnumDocumentationGenerator.getNamedElementFileName(eClassifier);
+					helpFileNameMap.put(eClassifier, helpClassifierDocumentationFileName);
+					helpClassifierDocumentation = eEnumDocumentationGenerator.generateDocumentation();
+				} else { // EDataType
+					EDataTypeDocumentationGenerator eDataTypeDocumentationGenerator = createEDataTypeDocumentationGenerator((EDataType) eClassifier, false, helpModeldocs);
+					helpClassifierDocumentationFileName = eDataTypeDocumentationGenerator.getNamedElementFileName(eClassifier);
+					helpFileNameMap.put(eClassifier, helpClassifierDocumentationFileName);
+					helpClassifierDocumentation = eDataTypeDocumentationGenerator.generateDocumentation();
+				}
+				
+				String wrappedDocumentation = HTMLFactory.INSTANCE.interpolate(GenerateEcoreDocumentationAction.class.getResource("help-page-template.html"), "content", helpClassifierDocumentation);
+				InputStream content = new ByteArrayInputStream(wrappedDocumentation.getBytes(StandardCharsets.UTF_8));
+				IFile eClassifierHelpFile = createFile(packageHelpOutputFolder, helpClassifierDocumentationFileName+".html", content, packageMonitor.split(1));
+				eClassifierHelpFile.setDerived(true, packageMonitor.split(1));
+			}
+
+			EPackageDocumentationGenerator ePacakgeDocumentationGenerator = createEPackageDocumentationGenerator(ePackage, false, helpModeldocs);
+			String ePackageDocumentation = ePacakgeDocumentationGenerator.generateDocumentation();
+			String wrappedDocumentation = HTMLFactory.INSTANCE.interpolate(GenerateEcoreDocumentationAction.class.getResource("help-page-template.html"), "content", ePackageDocumentation);
+			InputStream content = new ByteArrayInputStream(wrappedDocumentation.getBytes(StandardCharsets.UTF_8));
+			IFile ePackageHelpFile = createFile(packageHelpOutputFolder, "package-summary.html", content, packageMonitor.split(1));
+			ePackageHelpFile.setDerived(true, packageMonitor.split(1));
+			
+			ByteArrayOutputStream imgContent = new ByteArrayOutputStream();
+			ePacakgeDocumentationGenerator.generateDiagram(false, null, 0, RelationshipDirection.both, true, true, imgContent);				
+			IFile ePackageHelpDiagramFile = createFile(packageHelpOutputFolder, "package-summary.png", new ByteArrayInputStream(imgContent.toByteArray()), packageMonitor.split(1));
+			ePackageHelpDiagramFile.setDerived(true, packageMonitor.split(1));				
+		}
+		return helpFileNameMap;
 	}
 	
 	private String generateIndexHtml() {
@@ -968,19 +953,19 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		}
 	}
 	
-	private boolean load(EPackage ePackage, Set<EPackage> ePackages) {
-		if (ePackages.add(ePackage)) {
+	private boolean load(EPackage ePackage, Set<EPackage> ePackages, Set<String> excludedNsURIs) {
+		if (!excludedNsURIs.contains(ePackage.getNsURI()) && ePackages.add(ePackage)) {
 			TreeIterator<EObject> cit = ePackage.eAllContents();
 			while (cit.hasNext()) {
 				EObject next = cit.next();
 				if (next instanceof EClass) {
 					for (EClass st: ((EClass) next).getESuperTypes()) {
-						load(st.getEPackage(), ePackages);
+						load(st.getEPackage(), ePackages, excludedNsURIs);
 					}
 				} else if (next instanceof ETypedElement) {
 					EClassifier eType = ((ETypedElement) next).getEType();
 					if (eType != null) {
-						load(eType.getEPackage(), ePackages);
+						load(eType.getEPackage(), ePackages, excludedNsURIs);
 					}
 				}
 			}		
@@ -989,9 +974,9 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 		return false;
 	}
 	
-	private void load(GenPackage genPackage, Set<EPackage> ePackages) {
+	private void load(GenPackage genPackage, Set<EPackage> ePackages, Set<String> excludedNsURIs) {
 		EPackage ePackage = genPackage.getEcorePackage();
-		if (load(ePackage, ePackages)) {
+		if (load(ePackage, ePackages, excludedNsURIs)) {
 			for (GenClassifier gc: genPackage.getGenClassifiers()) {
 				EClassifier ec = gc.getEcoreClassifier();
 				if (ec.getInstanceClassName() == null) {

@@ -954,7 +954,7 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 	}
 	
 	private boolean load(EPackage ePackage, Set<EPackage> ePackages, Set<String> excludedNsURIs) {
-		if (!excludedNsURIs.contains(ePackage.getNsURI()) && ePackages.add(ePackage)) {
+		if (ePackage != null && !excludedNsURIs.contains(ePackage.getNsURI()) && ePackages.add(ePackage)) {
 			TreeIterator<EObject> cit = ePackage.eAllContents();
 			while (cit.hasNext()) {
 				EObject next = cit.next();

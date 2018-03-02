@@ -642,6 +642,10 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			}
 			
 			protected String getEPackageLocation(EPackage ePackage) {
+				if (ePackage == null) {
+					return null;
+				}
+
 				String modeldoc = modeldocs.get(ePackage.getNsURI());
 				if (modeldoc != null) {
 					if (!modeldoc.endsWith("/")) {
@@ -673,6 +677,10 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			}
 			
 			protected String getEPackageLocation(EPackage ePackage) {
+				if (ePackage == null) {
+					return null;
+				}
+
 				String modeldoc = modeldocs.get(ePackage.getNsURI());
 				if (modeldoc != null) {
 					if (!modeldoc.endsWith("/")) {
@@ -704,6 +712,10 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			}
 									
 			protected String getEPackageLocation(EPackage ePackage) {
+				if (ePackage == null) {
+					return null;
+				}
+
 				String modeldoc = modeldocs.get(ePackage.getNsURI());
 				if (modeldoc != null) {
 					if (!modeldoc.endsWith("/")) {
@@ -744,6 +756,9 @@ public class GenerateEcoreDocumentationAction implements IObjectActionDelegate {
 			}
 			
 			protected String getEPackageLocation(EPackage ePackage) {
+				if (ePackage == null) {
+					return null;
+				}
 				String modeldoc = modeldocs.get(ePackage.getNsURI());
 				if (modeldoc != null) {
 					if (!modeldoc.endsWith("/")) {

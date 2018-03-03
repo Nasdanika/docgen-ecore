@@ -22,4 +22,4 @@ jobs:
     
     steps:
       - checkout
-      - run: cd org.nasdanika.docgen.ecore.parent; mvn clean package
+      - run: cd org.nasdanika.docgen.ecore.parent; mvn clean javadoc:aggregate package site-deploy

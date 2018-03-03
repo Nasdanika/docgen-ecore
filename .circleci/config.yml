@@ -14,7 +14,7 @@ jobs:
       # documented at https://circleci.com/docs/2.0/circleci-images/
       # - image: circleci/postgres:9.4
 
-    working_directory: org.nasdanika.docgen.ecore.parent
+    working_directory: ~/repo
 
     environment:
       # Customize the JVM maximum heap limit
@@ -29,7 +29,8 @@ jobs:
           - v1-dependencies-{{ checksum "pom.xml" }}
           # fallback to using the latest cache if no exact match is found
           - v1-dependencies-
-
+          
+      - run: cd org.nasdanika.docgen.ecore.parent      
       - run: mvn dependency:go-offline
 
       - save_cache:

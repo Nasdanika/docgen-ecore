@@ -69,7 +69,7 @@
 	<distributionManagement>
 		<site>
 			<id>nasdanika-org</id>
-			<url>${env.FTP_SERVER}/docgen-ecore</url>
+			<url>sftp://${env.FTP_SERVER}/docgen-ecore</url>
 		</site>
 	</distributionManagement>	
 	

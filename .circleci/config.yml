@@ -22,4 +22,4 @@ jobs:
     
     steps:
       - checkout
-      - run: cd org.nasdanika.docgen.ecore.parent; mvn clean javadoc:aggregate package site-deploy
+      - run: ssh-keyscan -t rsa $FTP_SERVER >> ~/.ssh/known_hosts; cd org.nasdanika.docgen.ecore.parent; mvn -s ../.circleci/settings.xml clean javadoc:aggregate package site-deploy

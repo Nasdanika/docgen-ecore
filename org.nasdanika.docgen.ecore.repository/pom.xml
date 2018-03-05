@@ -15,7 +15,7 @@
 			<!-- Enabling the use of FTP -->
 			<extension>
 				<groupId>org.apache.maven.wagon</groupId>
-				<artifactId>wagon-ftp</artifactId>
+				<artifactId>wagon-ssh</artifactId>
 				<version>3.0.0</version>
 			</extension>
 		</extensions>
@@ -69,7 +69,7 @@
 	<distributionManagement>
 		<site>
 			<id>nasdanika-org</id>
-			<url>ftp://${env.FTP_SERVER}/docgen-ecore</url>
+			<url>sftp://${env.FTP_SERVER}/docgen-ecore</url>
 		</site>
 	</distributionManagement>	
 	

@@ -25,5 +25,14 @@
     <artifactId>maven-fluido-skin</artifactId>
     <version>1.7</version>
   </skin>
+  <custom>
+    <fluidoSkin>
+      <gitHub>
+        <projectId>nasdanika/docgen-ecore</projectId>
+        <ribbonOrientation>right</ribbonOrientation>
+        <ribbonColor>gray</ribbonColor>
+      </gitHub>
+    </fluidoSkin>
+  </custom>
  
 </project>

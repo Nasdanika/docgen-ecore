@@ -15,6 +15,12 @@
       <item name="API Documentation" href="apidocs/index.html" />
       <item name="Project information" href="project-info.html" />      
    </menu>
+
+   <menu name="Issues">
+      <item name="Roadmap" href="../../mantis/roadmap_page.php?project_id=9" />
+      <item name="All" href="../../mantis/view_all_bug_page.php?project_id=9" />
+      <item name="Change Log" href="../../mantis/changelog_page.php?project_id=9" />
+   </menu>
  
    <footer><![CDATA[All rights reserved.]]></footer>
  

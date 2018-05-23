@@ -6,7 +6,7 @@
   <body>
  
     <breadcrumbs>
-      <item name="Nasdanika" href="http://www.nasdanika.org"/>
+      <item name="Nasdanika" href="../site/index.html"/>
       <item name="DocGen Ecore" href="index.html"/>
     </breadcrumbs>
  
@@ -32,6 +32,9 @@
         <ribbonOrientation>right</ribbonOrientation>
         <ribbonColor>gray</ribbonColor>
       </gitHub>
+      <googleSearch>
+        <sitesearch>https://www.nasdanika.org/products/docgen-ecore</sitesearch>
+      </googleSearch>      
     </fluidoSkin>
   </custom>
  

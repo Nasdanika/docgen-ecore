@@ -5,9 +5,6 @@
    <extension
          point="org.eclipse.help.toc">
       <toc
-            file="help/toc.xml">
-      </toc>
-      <toc
             file="doc/toc.xml">
       </toc>
    </extension>

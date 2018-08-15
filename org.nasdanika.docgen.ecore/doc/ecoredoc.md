@@ -28,7 +28,9 @@ output:
   
 toc:
   label: TOC label
-  link_to: Where to link       
+  link_to: Where to link
+  
+set-derived: true             
 ```
 
 * ``models`` - a list of relative paths to models to generate documentation for - ``.ecore`` or ``.genmodel``. All referenced models will also be included. When generator models (``.genmodel``) are used the generated documentation includes Java type information. 
@@ -40,6 +42,7 @@ toc:
     * ``site`` - static HTML site. Optional.
     * ``help`` - Eclipse Help. Optional. 
 * ``toc`` - relevant only for Eclipse help generation. Contains ``toc`` element attributes such as ``label`` or ``link_to``.
+* ``set-derived`` - set to true in order to set ``derived`` attribute on the generated resources. 
 
 Example: 
 

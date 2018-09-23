@@ -1,7 +1,9 @@
 # Ecore Documentation Generation
 
-Nasdanika Ecore Documentation Generator plug-in allows to generate static HTML and Eclipse help documentation for Ecore models. The generator treats documentation annotations content as
-[markdown](https://daringfireball.net/projects/markdown/syntax). 
+Nasdanika Ecore Documentation Generator plug-in allows to generate static HTML and Eclipse help documentation for Ecore models. 
+The generator treats documentation annotations content as [markdown](https://daringfireball.net/projects/markdown/syntax).
+
+An example of HTML model documentation can be found [here](https://www.nasdanika.org/products/bank/modeldoc/index.html). 
 
 To generate documentation you will need to create a specification file with a predefined name ``ecore-docgen.yml``. The structure of the file is outlined below: 
 

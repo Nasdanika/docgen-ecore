@@ -2,8 +2,8 @@ package org.nasdanika.docgen.ecore;
 
 import org.nasdanika.html.FontAwesome.Spinner;
 import org.nasdanika.html.HTMLFactory;
-import org.nasdanika.html.HTMLFactory.InputType;
 import org.nasdanika.html.Input;
+import org.nasdanika.html.InputType;
 import org.nasdanika.html.Tag;
 
 /**

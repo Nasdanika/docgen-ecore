@@ -90,7 +90,7 @@ import org.nasdanika.html.HTMLFactory;
 import org.nasdanika.html.RowContainer.Row;
 import org.nasdanika.html.Table;
 import org.nasdanika.html.Tag;
-import org.nasdanika.html.Tag.TagName;
+import org.nasdanika.html.TagName;
 import org.nasdanika.html.Theme;
 import org.osgi.framework.Bundle;
 import org.pegdown.Extensions;
